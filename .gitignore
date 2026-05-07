@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+.env
+.env.*
+
+# Weights and large files
+weights/
+*.pt
+*.onnx
+*.tflite
+
+# Docker
+docker-compose.override.yml
+
+# VSCode
+.vscode/
+
+# Pytest cache
+.pytest_cache/
+
+# Logs
+*.log

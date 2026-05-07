@@ -1,0 +1,6 @@
+backend: yolov8   # options: yolov8, opencv
+model: weights/yolov8n.pt
+confidence: 0.25
+device: 0         # 0,1,... for GPU; -1 for CPU
+camera_source: 0  # 0 for default webcam or rtsp://...
+imgsz: 640
