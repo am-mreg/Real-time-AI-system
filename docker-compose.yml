@@ -1,13 +1,16 @@
 version: "3.8"
+
 services:
   yolo-live:
-      build: .
-          image: yolo-live:latest
-              ports:
-                    - "8000:8000"
-                        devices:
-                              - "/dev/video0:/dev/video0"
-                                  volumes:
-                                        - ./weights:/app/weights
-                                            environment:
-                                                  - CONFIG_PATH=/app/config/config.yaml
+    build: .
+    image: yolo-live:latest
+    ports:
+      - "8000:8000"
+    devices:
+      - "/dev/video0:/dev/video0"
+    volumes:
+      - ./weights:/app/weights
+      - ./config:/app/config
+    environment:
+      - CONFIG_PATH=/app/config/config.yaml
+    restart: unless-stopped

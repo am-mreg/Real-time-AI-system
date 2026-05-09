@@ -3,100 +3,205 @@
 <head>
   <meta charset="utf-8" />
   <title>YOLO Live Viewer</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body { 
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-      background: #0a0a0a; 
-      color: #eee; 
-      display: flex; 
-      flex-direction: column; 
-      align-items: center; 
-      justify-content: center;
-      min-height: 100vh;
-      margin: 0;
+    :root{--bg:#0a0a0a;--panel:#1a1a1a;--accent:#00ff00;--muted:#444}
+    html,body{height:100%;margin:0}
+    body{
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background:var(--bg);
+      color:#eee;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+      box-sizing:border-box;
     }
-    h1 { color: #00ff00; text-shadow: 0 0 10px rgba(0,255,0,0.3); }
-    img { 
-      max-width: 90%; 
-      height: auto; 
-      border: 2px solid #333; 
-      border-radius: 8px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      background: #1a1a1a;
+    .app {
+      width:100%;
+      max-width:900px;
+      text-align:center;
     }
-    .controls { 
-      margin-top: 20px; 
-      padding: 15px;
-      background: #1a1a1a;
-      border-radius: 8px;
+    h1{color:var(--accent);margin:8px 0;text-shadow:0 0 10px rgba(0,255,0,0.2)}
+    .viewer {
+      background:var(--panel);
+      padding:12px;
+      border-radius:10px;
+      box-shadow:0 10px 30px rgba(0,0,0,0.6);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:12px;
     }
-    input { 
-      padding: 8px; 
-      border-radius: 4px; 
-      border: 1px solid #444; 
-      background: #222; 
-      color: white; 
+    .media {
+      width:100%;
+      max-width:820px;
+      height:auto;
+      border-radius:6px;
+      overflow:hidden;
+      background:#000;
+      display:flex;
+      align-items:center;
+      justify-content:center;
     }
-    button { 
-      padding: 8px 20px; 
-      background: #00ff00; 
-      color: black; 
-      border: none; 
-      border-radius: 4px; 
-      cursor: pointer; 
-      font-weight: bold; 
+    img#stream, video#localVideo {
+      width:100%;
+      height:auto;
+      display:block;
+      background:#000;
     }
-    button:hover { background: #00cc00; }
-    .status { margin-top: 12px; color: #00ff00; font-family: monospace; }
-    .error { color: #ff4444; }
+    .controls {
+      display:flex;
+      gap:8px;
+      align-items:center;
+      justify-content:center;
+      flex-wrap:wrap;
+      margin-top:6px;
+    }
+    input[type="text"]{
+      padding:8px 10px;
+      border-radius:6px;
+      border:1px solid var(--muted);
+      background:#111;
+      color:#fff;
+      min-width:220px;
+    }
+    button{
+      padding:8px 14px;
+      border-radius:6px;
+      border:none;
+      background:var(--accent);
+      color:#000;
+      font-weight:700;
+      cursor:pointer;
+    }
+    button.secondary{
+      background:#333;color:#fff;border:1px solid var(--muted)
+    }
+    .status{margin-top:8px;font-family:monospace;color:var(--accent)}
+    .status.error{color:#ff6666}
+    .note{font-size:13px;color:#bbb;margin-top:6px}
   </style>
 </head>
 <body>
-  <h1>YOLO Real-Time Detection</h1>
-  
-  <div id="container">
-    <img id="stream" alt="Lidhja me serverin..." />
-  </div>
+  <div class="app">
+    <h1>YOLO Real-Time Detection</h1>
 
-  <div class="controls">
-    <label>URL: <input id="streamUrl" value="/stream" /></label>
-    <button id="start">Rinis Stream</button>
+    <div class="viewer" role="region" aria-label="Live viewer">
+      <div class="media" id="mediaContainer">
+        <!-- Server stream (multipart JPEG) -->
+        <img id="stream" alt="Lidhja me serverin..." crossorigin="anonymous" />
+
+        <!-- Local camera preview (hidden by default) -->
+        <video id="localVideo" autoplay playsinline muted style="display:none"></video>
+      </div>
+
+      <div class="controls">
+        <label>
+          URL:
+          <input id="streamUrl" type="text" value="/stream" />
+        </label>
+
+        <button id="startServer">Përdor Server Stream</button>
+        <button id="startCamera" class="secondary">Përdor Kamerën Lokale</button>
+        <button id="stopCamera" class="secondary" style="display:none">Ndalo Kamerën</button>
+      </div>
+
+      <div class="status" id="status">Gati.</div>
+      <div class="note" id="note">Nëse përdor kamerën lokale, shfletuesi do të kërkojë leje. Shërbimi i serverit duhet të jetë i aksesueshëm nga shfletuesi (localhost ose HTTPS).</div>
+    </div>
   </div>
-  <div class="status" id="status">Duke u lidhur...</div>
 
   <script>
-    const startBtn = document.getElementById('start');
     const img = document.getElementById('stream');
-    const statusText = document.getElementById('status');
+    const localVideo = document.getElementById('localVideo');
+    const status = document.getElementById('status');
     const urlInput = document.getElementById('streamUrl');
+    const startServerBtn = document.getElementById('startServer');
+    const startCameraBtn = document.getElementById('startCamera');
+    const stopCameraBtn = document.getElementById('stopCamera');
 
-    function startStream() {
-      // Shtojmë një timestamp për të detyruar browser-in të mos përdorë cache-in
-      const timestamp = new Date().getTime();
-      const baseUrl = urlInput.value;
+    let localStream = null;
+
+    function setStatus(text, isError = false) {
+      status.textContent = text;
+      status.className = isError ? 'status error' : 'status';
+    }
+
+    function startServerStream() {
+      // Stop local camera if running
+      stopLocalCamera();
+
+      const baseUrl = urlInput.value.trim() || '/stream';
+      const timestamp = Date.now();
       const finalUrl = baseUrl.includes('?') ? `${baseUrl}&t=${timestamp}` : `${baseUrl}?t=${timestamp}`;
-      
-      statusText.textContent = 'Duke u lidhur me serverin...';
-      statusText.className = 'status';
+
+      // Use <img> for multipart/x-mixed-replace streams (MJPEG)
+      img.style.display = '';
+      localVideo.style.display = 'none';
       img.src = finalUrl;
+      setStatus('Duke u lidhur me serverin...');
     }
 
     img.onload = () => {
-      statusText.textContent = 'LIVE: Konfiguruar me sukses.';
-      statusText.className = 'status';
+      setStatus('LIVE: Konfiguruar me sukses.');
     };
 
     img.onerror = () => {
-      statusText.textContent = 'GABIM: Serveri nuk po përgjigjet. Sigurohu që porta 8000 është PUBLIC.';
-      statusText.className = 'status error';
+      setStatus('GABIM: Serveri nuk po përgjigjet ose stream-i nuk është MJPEG. Kontrollo URL dhe CORS.', true);
     };
 
-    startBtn.onclick = startStream;
+    async function startLocalCamera() {
+      // Stop server stream image to avoid mixed requests
+      img.src = '';
+      img.style.display = 'none';
 
-    // Nis automatikisht pas 1 sekonde (i jep kohë serverit të stabilizohet)
-    window.onload = () => {
-      setTimeout(startStream, 1000);
-    };
+      // Request camera permission and start preview
+      try {
+        const constraints = { video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "environment" }, audio: false };
+        localStream = await navigator.mediaDevices.getUserMedia(constraints);
+        localVideo.srcObject = localStream;
+        localVideo.style.display = '';
+        setStatus('Kamera lokale aktive.');
+        startCameraBtn.style.display = 'none';
+        stopCameraBtn.style.display = '';
+      } catch (err) {
+        console.error('getUserMedia error:', err);
+        setStatus('Nuk u mund të hap kamera: ' + (err && err.message ? err.message : err), true);
+        // Restore server image element visibility so user can try server stream
+        img.style.display = '';
+      }
+    }
+
+    function stopLocalCamera() {
+      if (localStream) {
+        const tracks = localStream.getTracks();
+        tracks.forEach(t => t.stop());
+        localStream = null;
+      }
+      localVideo.srcObject = null;
+      localVideo.style.display = 'none';
+      startCameraBtn.style.display = '';
+      stopCameraBtn.style.display = 'none';
+      setStatus('Kamera lokale e ndaluar.');
+    }
+
+    stopCameraBtn.addEventListener('click', stopLocalCamera);
+    startCameraBtn.addEventListener('click', startLocalCamera);
+    startServerBtn.addEventListener('click', startServerStream);
+
+    // Auto-start server stream on load (gives server 1s to start)
+    window.addEventListener('load', () => {
+      setTimeout(startServerStream, 1000);
+    });
+
+    // Helpful hint if browser blocks getUserMedia due to insecure context
+    (function checkSecureContext() {
+      if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        const note = document.getElementById('note');
+        note.textContent = 'Vërejtje: getUserMedia kërkon kontekst të sigurt (HTTPS) ose localhost. Në Codespaces web preview kamera mund të mos jetë e disponueshme.';
+      }
+    })();
   </script>
 </body>
 </html>
